@@ -1,28 +1,43 @@
 #!/bin/bash
 
-echo -e "\nBuilding KCSwitch"
-if cargo build --release; then
-	echo "Package built successfully"
+NC='\033[0m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+
+print_success() {
+	echo -e "${GREEN}${*}${NC}"
+}
+
+print_error() {
+	echo -e "${RED}${*}${NC}"
+}
+
+# Making package
+echo -e "\nBuilding package"
+if make build; then
+	print_success "Package built successfully"
 else
-	echo "Cannot build package"
+	print_error "Cannot build package"
+	exit 1
 fi
 
-echo -e "\nCreating binary link"
-SCRIPT=$(realpath "$0")
-SCRIPTPATH=$(dirname "$SCRIPT")
-target_symlink="$SCRIPTPATH/target/release/kcswitch"
-source_symlink="$HOME/.local/bin/kcswitch"
-if ln -s $target_symlink $source_symlink; then 
-	echo "Symlink $source_symlink -> $target_symlink created"
+echo -e "\nInstalling package"
+if make install; then
+	print_success "Package installed successfully"
 else
-	echo "Symlink not created. File already exists or you need to add binary file to your PATH manually."
+	print_error "Cannot install package"
+	exit 1
 fi
 
-echo -e "\nExporting KUBECONFIG variable"
+echo -e "\nCleaning build artifacts"
+if make clean; then
+	print_success "Artifacts cleaned successfully"
+else
+	print_error "Cannot clean artifacts"
+fi
+
+# Detecting shell
 current_shell=$(basename "$SHELL")
-kubeconfig_path="$HOME/.kcswitch/.kubeconfig"
-var="KUBECONFIG=${kubeconfig_path}"
-
 case "$current_shell" in
   bash)
     config_file="$HOME/.bashrc"
@@ -34,16 +49,38 @@ case "$current_shell" in
     config_file="$HOME/.kshrc"
     ;;
   *)
-    echo "Unsupported shell: $current_shell"
-    echo "You need to export variable '$var' manually"
+    print_error "Unsupported shell: $current_shell"
     exit 1
     ;;
 esac
 
-if ! grep -q "export $var" "$config_file"; then
-	echo -e "\n# KCSwitch configuration" >> "$config_file"
-	echo "export $var" >> "$config_file"
-	echo "Variables exported to $config_file"
+config_header="# Generated for KCSwitch. Do not remove"
+if ! grep -q "${config_header}" "$config_file"; then
+  echo -e "\n${config_header}" >> "$config_file"
+fi
+
+# Adding ~/.local/bin to directory
+echo -e "\nAdding $HOME/.local/bin directory to PATH"
+if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
+	if echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$config_file"; then
+	  print_success "$HOME/.local/bin directory successfully added to PATH"
+	else
+	  print_error "Cannot add $HOME/.local/bin directory to PATH"
+	fi
 else
-	echo "KUBECONFIG variable already set in '$config_file'."
+	print_success "$HOME/.local/bin directory already in PATH"
+fi
+
+# Exporting KUBECONFIG variable
+echo -e "\nExporting KUBECONFIG variable"
+kubeconfig_path="$HOME/.kcswitch/.kubeconfig"
+var="KUBECONFIG=${kubeconfig_path}"
+if ! grep -q "export $var" "$config_file"; then
+	if echo "export $var" >> "$config_file"; then
+	  print_success "Variables exported to $config_file"
+	else
+	  print_error "KUBECONFIG variable not exported"
+	fi
+else
+	print_success "KUBECONFIG variable already set in '$config_file'."
 fi

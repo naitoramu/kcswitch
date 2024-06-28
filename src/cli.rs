@@ -21,6 +21,7 @@ pub enum Command {
         #[arg(short, long)]
         name: Option<String>,
     },
+    /// Delete kubeconfig
     Delete {
         /// Name of the kubeconfig to be deleted
         kubeconfig: String
